@@ -57,10 +57,11 @@
     (get (run-program memory) 0)))
 
 
-(->> (partition-all 4 (read-int-array "resources/02/1.txt"))
-     (map-indexed (fn [idx val] [(* 4 idx) val]))
-     (clojure.pprint/pprint))
 
+(comment ;; Part 2 - Inspecting the operations
+  (->> (partition-all 4 (read-int-array "resources/02/1.txt"))
+       (map-indexed (fn [idx val] [(* 4 idx) val]))
+       (clojure.pprint/pprint)))
 
 
 (defn sym-add
@@ -109,13 +110,13 @@
       memory)))
 
 
-(comment ;; Part 2
+(comment ;; Part 2 - Running the Intcode computer symbolically, use sympy to simplify, solve by hand.
   (let [memory (-> (read-int-array "resources/02/1.txt")
                    (assoc 1 "x")
                    (assoc 2 "y"))]
     (prn (get (sym-run-program memory) 0)))
 
-  ;; 3 lines of python later:
+  ;; 2 lines of python later:
   ;; In [1]: import sympy
 
   ;; In [2]: sympy.simplify("(1 + (((4 * (1 + ((4 * (((5 + (2 * (((((((((((((5 + (2 + (1 + ((((5 + (4 + (((2 * x) + 3) + 3))) + 4) * 3) + 5)))) + 2) + 4) * 2) + 1) * 4) + 2) + 1) + 2) + 5) + 2) * 4) + 2))) * 4) + 1)) * 3))) * 3) + y))")
@@ -123,6 +124,7 @@
 
   (assert (= 76.0 (Math/floor (/ (- 19690720 2880733) 221184))))
 
+  ;; noun = 76, verb = 3
   (assert (= 19690720 (+ (* 221184 76) 3 2880733))))
 
 
