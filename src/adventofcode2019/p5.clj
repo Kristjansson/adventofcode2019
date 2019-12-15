@@ -9,69 +9,73 @@
   (criterium/quick-bench (= \1 (.charAt ^String (str 10100) 2))))
 
 
-(defn read
-  [memory addr]
-  (case addr
-    -1 (read-string (read-line))
-    (get memory addr)))
+(defn param-modes
+  [param-mode opcode]
+  (let [param-count (case opcode
+                      (99) 0
+                      (3 4) 1
+                      (1 2) 3)]
+
+    (->> (concat (reverse (str param-mode)) (repeat \0))
+         (take param-count)
+         (map #(- (int %) 48)))))
 
 
-(defn write
-  [memory addr value]
-  (case addr
-    -1 (do (prn value) memory)
-    (assoc memory addr value)))
+(defprotocol Parameter
+  (read [this])
+  (write [this value]))
+
+(defrecord PositionalParameter
+    [memory addr]
+
+  Parameter
+  (read [this] (get memory addr))
+  (write [_ value] (assoc memory addr value)))
+
+(defrecord ImmediateParameter
+    [memory value]
+
+  Parameter
+  (read [this] value)
+  (write [_ _] (throw (ex-info "Can't write to an immediate parameter" {}))))
+
+
+(defn parameters
+  [memory stack-ptr param-modes]
+  (map (fn [mode offset]
+         ((case mode
+             0 ->PositionalParameter
+             1 ->ImmediateParameter)
+          memory
+          (get memory (+ stack-ptr offset 1))))
+       param-modes (range)))
 
 
 (defn step
   [[memory stack-ptr]]
-  (let [read' (partial read memory)
-        write' (partial write memory)
-        opcode (get memory stack-ptr)]
-    [(case opcode ;; update memory
-       ;; add
-       1 (write' (read' (+ 3 stack-ptr))
-                 (+ (read' (read' (+ 1 stack-ptr)))
-                    (read' (read' (+ 2 stack-ptr)))))
-       101 (write' (read' (+ 3 stack-ptr))
-                   (+ (read' (+ 1 stack-ptr))
-                      (read' (read' (+ 2 stack-ptr)))))
-       1001 (write' (read' (+ 3 stack-ptr))
-                    (+ (read' (read' (+ 1 stack-ptr)))
-                       (read' (+ 2 stack-ptr))))
-       1101 (write' (read' (+ 3 stack-ptr))
-                    (+ (read' (+ 1 stack-ptr))
-                       (read' (+ 2 stack-ptr))))
-
-       ;; multiply
-       2 (write' (read' (+ 3 stack-ptr))
-                 (* (read' (read' (+ 1 stack-ptr)))
-                    (read' (read' (+ 2 stack-ptr)))))
-       102 (write' (read' (+ 3 stack-ptr))
-                   (* (read' (+ 1 stack-ptr))
-                      (read' (read' (+ 2 stack-ptr)))))
-       1002 (write' (read' (+ 3 stack-ptr))
-                    (* (read' (read' (+ 1 stack-ptr)))
-                       (read' (+ 2 stack-ptr))))
-       1102 (write' (read' (+ 3 stack-ptr))
-                    (* (read' (+ 1 stack-ptr))
-                       (read' (+ 2 stack-ptr))))
-
-       ;; input
-       3 (write' (read' (+ 1 stack-ptr))
-                 (read' -1))
-
-       ;; output
-       4 (write' -1 (read' (read' (+ 1 stack-ptr))))
-       104 (write' -1 (read' (+ 1 stack-ptr)))
-
-       ;; unknown - dump memory
-       memory)
+  (let [instruction (get memory stack-ptr)
+        opcode (mod instruction 100)
+        p-modes (param-modes (int (/ instruction 100)) opcode)
+        params (parameters memory stack-ptr p-modes)]
+    [(apply
+       (case opcode ;; update memory
+         ;; add
+         1 (fn [in1 in2 out] (write out (+ (read in1) (read in2))))
+         ;; multiply
+         2 (fn [in1 in2 out] (write out (* (read in1) (read in2))))
+         ;; input
+         3 (fn [in] (write in (read-string (read-line))))
+         ;; output
+         4 (fn [in] (do
+                      (prn (read in))
+                      memory))
+         ;; unknown - dump memory
+         (fn [& _] memory))
+       params)
 
      (case opcode ;; update stack-ptr
-       (1 101 1001 1101 2 102 1002 1102) (+ 4 stack-ptr)
-       (3 4 104) (+ 2 stack-ptr)
-
+       (1 2) (+ 4 stack-ptr)
+       (3 4) (+ 2 stack-ptr)
        (do
          (println "saw exit code:" opcode)
          -1))]))
@@ -93,6 +97,7 @@
 
 
   )
+
 
 
 ;; (step (step (step [[03 1 004 1 99] 0])))
