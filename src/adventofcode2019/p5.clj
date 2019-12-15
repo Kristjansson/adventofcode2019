@@ -14,7 +14,8 @@
   (let [param-count (case opcode
                       (99) 0
                       (3 4) 1
-                      (1 2) 3)]
+                      (5 6) 2
+                      (1 2 7 8) 3)]
 
     (->> (concat (reverse (str param-mode)) (repeat \0))
          (take param-count)
@@ -69,16 +70,30 @@
          4 (fn [in] (do
                       (prn (read in))
                       memory))
+         ;; jumps
+         (5 6) (fn [& _] memory)
+         ;; less than
+         7 (fn [in1 in2 out] (write out (if (< (read in1) (read in2)) 1 0)))
+         ;; equal to
+         8 (fn [in1 in2 out] (write out (if (= (read in1) (read in2)) 1 0)))
          ;; unknown - dump memory
          (fn [& _] memory))
        params)
 
-     (case opcode ;; update stack-ptr
-       (1 2) (+ 4 stack-ptr)
-       (3 4) (+ 2 stack-ptr)
-       (do
-         (println "saw exit code:" opcode)
-         -1))]))
+     (apply
+       (case opcode ;; update stack-ptr
+         (1 2 7 8) (fn [& _] (+ 4 stack-ptr))
+         (3 4) (fn [& _] (+ 2 stack-ptr))
+         5 (fn [in1 in2] (if-not (zero? (read in1))
+                           (read in2)
+                           (+ 3 stack-ptr)))
+         6 (fn [in1 in2] (if (zero? (read in1))
+                           (read in2)
+                           (+ 3 stack-ptr)))
+         (fn [& _]
+           (println "saw exit code:" opcode)
+           -1))
+       params)]))
 
 
 (defn run-program
@@ -95,12 +110,12 @@
   (let [program (core/read-int-array "resources/05/1.txt")]
     (run-program program))
 
-
-  )
-
-
-
-;; (step (step (step [[03 1 004 1 99] 0])))
-
-
-
+  (run-program [3,9,8,9,10,9,4,9,99,-1,8])
+  (run-program [3,9,7,9,10,9,4,9,99,-1,8])
+  (run-program [3,3,1108,-1,8,3,4,3,99])
+  (run-program [3,3,1107,-1,8,3,4,3,99])
+  (run-program [3,12,6,12,15,1,13,14,13,4,13,99,-1,0,1,9])
+  (run-program [3,3,1105,-1,9,1101,0,0,12,4,12,99,1])
+  (run-program [3,21,1008,21,8,20,1005,20,22,107,8,21,20,1006,20,31,
+                1106,0,36,98,0,0,1002,21,125,20,4,20,1105,1,46,104,
+                999,1105,1,46,1101,1000,1,20,4,20,1105,1,46,98,99]))
