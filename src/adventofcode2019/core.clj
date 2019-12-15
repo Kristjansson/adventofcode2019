@@ -7,3 +7,10 @@
   [file-name]
   (-> (slurp file-name)
       (str/split-lines)))
+
+
+(defn read-int-array
+  [file-name]
+  (->> (str/split (str/trim (slurp file-name)) #"\,")
+       (mapv #(Integer/parseInt %))))
+
